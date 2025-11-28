@@ -1,5 +1,152 @@
 // Sistema completo de gestión de tareas usando múltiples patrones de diseño
 
+// Ejercicio: Extiende el sistema creando un 
+// Ok patrón Command para operaciones undo/redo, 
+// un patrón Strategy para diferentes algoritmos de filtrado de tareas, 
+// y un patrón Decorator para agregar funcionalidades como notificaciones por email o 
+// integración con calendario a las tareas.
+
+
+
+
+// Patrón Command
+
+class Command {
+     constructor(gestor){
+      this.gestor = gestor;
+     }
+     ejecutar(){
+      throw new Error("Método 'ejecutar(()' debe ser implementado.");
+     }
+      deshacer(){
+      throw new Error("Método 'deshacer()' debe ser implementado.");
+      }  
+}
+
+class AgregarTareaCommand extends Command {
+   constructor(gestor, tipo, datos) {
+      super(gestor);
+      this.tipo = tipo;
+      this.datos = datos;
+      this.tareaCreada = null;  
+   }
+
+   ejecutar(){
+    const fabrica = new FabricaTareas();
+    const newId = this.gestor.siguienteId++;
+    this.tareaCreada = fabrica.crearTarea(this.tipo, {
+      id: newId,
+      ...this.datos,
+      fechaCreacion: new Date()
+    });
+    this.gestor.tareas.set(this.tareaCreada.id, this.tareaCreada);
+    this.gestor.notificar('tarea_creada', this.tareaCreada);
+    return this.tareaCreada;
+   }
+   deshacer(){
+    if(this.tareaCreada){
+      this.gestor.tareas.delete(this.tareaCreada.id);
+      this.gestor.notificar('tarea_eliminada', this.tareaCreada);
+    }
+    return false; 
+   }
+}
+
+class EliminarTareaCommnand extends Command {
+
+    constructor(gestor, id){
+      super(gestor);
+      this.id = id;
+      this.tareaEliminada = null;
+    }
+     
+    ejecutar(){
+      this.tareaEliminada = this.gestor.tareas.get(this.id);
+      if(this.tareaEliminada){
+        this.gestor.tareas.delete(this.id);
+        this.gestor.notificar('tarea_eliminada', this.tareaEliminada);
+        return true;
+      }
+      return false;
+    }
+    deshacer(){
+      if(this.tareaEliminada){
+        this.gestor.tareas.set(this.tareaEliminada.id, this.tareaEliminada);
+        this.gestor.notificar('tarea_creada', this.tareaEliminada);
+        return true;      
+      }
+      return false;
+    }
+}
+
+class CompletarTareaCommand extends Command {
+
+    constructor(gestor, id, estadoDeseado = true){
+      super(gestor);
+      this.id = id;
+      this.estadoDeseado = estadoDeseado;
+      this.estadoAnterior = null;
+      this.tarea = null;
+    }
+    ejecutar(){
+      this.tarea = this.gestor.tareas.get(this.id);
+      if(this.tarea){
+        this.estadoAnterior = this.tarea.completada;
+        this.tarea.completada = this.estadoDeseado;
+        this.gestor.notificar('tarea_actualizada', this.tarea);
+        return true;
+      }
+      return false;
+    }
+    deshacer(){
+      if(this.tarea && this.estadoAnterior !== null){
+        this.tarea.completada = this.estadoAnterior;
+        this.gestor.notificar('tarea_actualizada', this.tarea);
+        return true;
+      }
+      return false;
+    }
+
+  }
+
+  class HistorialComandos {
+    constructor() {
+      this.undoStack = [];
+      this.redoStack = [];
+      this.MAX_HISTORY = 20; // Limitar el tamaño del historial
+    }
+    ejecutarComando(command) {
+
+      this.undoStack.push(command);
+      this.redoStack = []; // Limpiar redo al ejecutar nuevo comando
+ 
+       if(this.undoStack.length > this.MAX_HISTORY){
+        this.undoStack.shift(); // Eliminar el comando más antiguo
+       } 
+    }
+    deshacer() {
+      if(this.undoStack.length > 0){
+        const command = this.undoStack.pop();
+        command.deshacer();
+        this.redoStack.push(command);
+        return true;
+      }
+      console.log("No hay comandos para deshacer.");
+      return false;
+    }
+    rehacer() {
+      if(this.redoStack.length > 0){
+        const command = this.redoStack.pop();
+        command.ejecutar();
+        this.undoStack.push(command);
+        return true;
+      }
+      console.log("No hay comandos para rehacer.");
+      return false;
+    }
+
+}
+
 // 1. Singleton para el gestor principal
 class GestorTareas {
   constructor() {
