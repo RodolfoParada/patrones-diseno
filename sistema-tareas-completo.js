@@ -2,12 +2,116 @@
 
 // Ejercicio: Extiende el sistema creando un 
 // Ok patrón Command para operaciones undo/redo, 
-// un patrón Strategy para diferentes algoritmos de filtrado de tareas, 
+// Ok un patrón Strategy para diferentes algoritmos de filtrado de tareas, 
 // y un patrón Decorator para agregar funcionalidades como notificaciones por email o 
 // integración con calendario a las tareas.
 
+// Patrón Decorator
+
+class TareaDecorator {
+    constructor(tareaComponente) {
+        this.tareaComponente = tareaComponente;
+        // Copiar propiedades esenciales para que el decorador pueda ser tratado como una tarea
+        this.id = tareaComponente.id;
+        this.titulo = tareaComponente.titulo;
+        this.completada = tareaComponente.completada;
+    }
+
+    completar() {
+        return this.tareaComponente.completar();
+    }
 
 
+    obtenerInformacion() {
+        return this.tareaComponente.obtenerInformacion();
+    }
+}
+
+class NotificacionEmailDecorator extends TareaDecorator {
+    constructor(tareaComponente, destinatario) {
+        super(tareaComponente);
+        this.destinatario = destinatario;
+    }
+
+    // Nueva funcionalidad: Simula el envío de un email
+    _enviarEmail(titulo) {
+        console.log(`[DECORATOR EMAIL] Enviando notificación por email a ${this.destinatario}: Tarea "${titulo}" ha sido completada.`);
+    }
+
+    // Se sobrescribe el método principal para añadir la funcionalidad ANTES de delegar
+    completar() {
+        const resultado = this.tareaComponente.completar();
+        if (resultado) {
+            this._enviarEmail(this.titulo);
+        }
+        return resultado;
+    }
+}
+
+
+class RegistroCalendarioDecorator extends TareaDecorator {
+    constructor(tareaComponente) {
+        super(tareaComponente);
+    }
+
+    // Nueva funcionalidad: Simula la integración con un calendario
+    _registrarEnCalendario(titulo) {
+        const fecha = new Date().toISOString().substring(0, 10);
+        console.log(`[DECORATOR CALENDARIO] Registrando en calendario: Tarea "${titulo}" completada el ${fecha}.`);
+    }
+
+    // Se sobrescribe el método principal para añadir la funcionalidad ANTES de delegar
+    completar() {
+        const resultado = this.tareaComponente.completar();
+        if (resultado) {
+            this._registrarEnCalendario(this.titulo);
+        }
+        return resultado;
+    }
+}
+
+
+
+
+
+
+// Patrón Strategy
+class EstrategiaFiltro {
+    filtrar(tareas) { throw new Error("Método 'filtrar' debe ser implementado por la estrategia concreta."); }
+}
+
+
+class FiltroPorCompletada extends EstrategiaFiltro {
+    constructor(completada) {
+        super();
+        this.completada = completada;
+    }
+    filtrar(tareas) {
+        return tareas.filter(t => t.completada === this.completada);
+    }
+}
+
+
+class FiltroPorPrioridad extends EstrategiaFiltro {
+    constructor(prioridad) {
+        super();
+        this.prioridad = prioridad;
+    }
+    filtrar(tareas) {
+        return tareas.filter(t => t.prioridad === this.prioridad);
+    }
+}
+
+
+class FiltroPorTipo extends EstrategiaFiltro {
+    constructor(tipo) {
+        super();
+        this.tipo = tipo;
+    }
+    filtrar(tareas) {
+        return tareas.filter(t => t.tipo === this.tipo);
+    }
+}
 
 // Patrón Command
 
@@ -251,6 +355,36 @@ class GestorTareas {
       }, {})
     };
   }
+
+  // Método para aplicar decoradores (integración del Decorator)
+    aplicarDecorador(id, tipoDecorador, ...args) {
+        let tarea = this.tareas.get(id);
+        if (!tarea) {
+            console.error(`Tarea con ID ${id} no encontrada.`);
+            return false;
+        }
+
+        let decorador;
+        switch (tipoDecorador.toLowerCase()) {
+            case 'email':
+                // Requiere el destinatario, que se pasa como primer argumento en args[0]
+                decorador = new NotificacionEmailDecorator(tarea, args[0]);
+                break;
+            case 'calendario':
+                // No requiere argumentos adicionales
+                decorador = new RegistroCalendarioDecorator(tarea);
+                break;
+            default:
+                console.error(`Decorador '${tipoDecorador}' no soportado.`);
+                return false;
+        }
+
+        // ¡Paso clave! Reemplazamos la tarea original en el mapa con la versión decorada.
+        // Si la tarea ya estaba decorada, el nuevo decorador la envuelve.
+        this.tareas.set(id, decorador);
+        console.log(`[GESTOR] Tarea ${id} decorada con ${tipoDecorador}.`);
+        return decorador;
+    }
 }
 
 // 2. Factory Pattern para crear diferentes tipos de tareas
@@ -501,3 +635,70 @@ console.log('\n📈 ESTADÍSTICAS DE EVENTOS:');
 console.log(observadorEstadisticas.obtenerEstadisticas());
 
 console.log('\n🎯 Sistema de gestión de tareas completado exitosamente!');
+
+
+// 2. Crear datos de ejemplo
+console.log('📝 Creando tareas de ejemplo...');
+gestor.crearTarea('basica', { titulo: 'T1: Comprar café', prioridad: 'alta' }); // ID 1
+gestor.crearTarea('basica', { titulo: 'T2: Pagar factura', prioridad: 'media' }); // ID 2
+gestor.crearTarea('con-fecha-limite', { titulo: 'T3: Entregar reporte', prioridad: 'alta', fechaLimite: new Date(Date.now() + 10000000) }); // ID 3
+gestor.crearTarea('recurrente', { titulo: 'T4: Revisar email', prioridad: 'baja' }); // ID 4
+
+// 3. Modificar estado
+gestor.actualizarTarea(1, { completada: true }); // T1: Completada
+
+console.log('-------------------------------------------');
+console.log('Tareas totales:', gestor.obtenerEstadisticas().total);
+
+// --- DEMOSTRACIÓN STRATEGY ---
+console.log('\n🔍 DEMOSTRACIÓN STRATEGY: APLICANDO FILTROS COMBINADOS');
+
+// Estrategia 1: Filtrar por Tareas Pendientes (completada = false)
+const filtroPendiente = new FiltroPorCompletada(false);
+
+// Estrategia 2: Filtrar por Prioridad Alta
+const filtroAlta = new FiltroPorPrioridad('alta');
+
+// Estrategia 3: Filtrar por Tipo 'con-fecha-limite'
+const filtroTipoFecha = new FiltroPorTipo('con-fecha-limite');
+
+
+// Combinación A: Pendientes (Filtro 1)
+let resultadoA = gestor.obtenerTareas([filtroPendiente]);
+console.log(`\nResultado A: Solo Tareas Pendientes (${resultadoA.length})`);
+resultadoA.forEach(t => console.log(`- ID ${t.id}: ${t.titulo}, Completada: ${t.completada}`));
+// Esperado: T2, T3, T4 (3 tareas)
+
+// Combinación B: Pendientes Y Prioridad Alta (Filtro 1 y 2)
+let resultadoB = gestor.obtenerTareas([filtroPendiente, filtroAlta]);
+console.log(`\nResultado B: Pendientes Y Prioridad Alta (${resultadoB.length})`);
+resultadoB.forEach(t => console.log(`- ID ${t.id}: ${t.titulo}, Prioridad: ${t.prioridad}`));
+// Esperado: T3 (1 tarea)
+
+// Combinación C: Solo Tareas con Fecha Límite (Filtro 3)
+let resultadoC = gestor.obtenerTareas([filtroTipoFecha]);
+console.log(`\nResultado C: Solo Tareas con Fecha Límite (${resultadoC.length})`);
+resultadoC.forEach(t => console.log(`- ID ${t.id}: ${t.titulo}, Tipo: ${t.tipo}`));
+// Esperado: T3 (1 tarea)
+
+
+console.log('📝 Creando tareas de ejemplo...');
+const tareaID1 = gestor.crearTarea('basica', { titulo: 'T1: Desarrollar Feature X', prioridad: 'alta' }).id; 
+const tareaID2 = gestor.crearTarea('con-fecha-limite', { titulo: 'T2: Enviar informe final', prioridad: 'media', fechaLimite: new Date(Date.now() + 10000000) }).id;
+
+// 3. Aplicar Decoradores a Tarea 1 y Tarea 2
+console.log('\n✨ Aplicando Decoradores (Email y Calendario)...');
+
+// Tarea 1: Email
+const tareaDecoradaEmail = gestor.aplicarDecorador(tareaID1, 'email', 'juan.perez@empresa.com');
+
+// Tarea 2: Email + Calendario (Encadenamiento de Decoradores)
+const tareaDecoradaCalendario = gestor.aplicarDecorador(tareaID2, 'calendario');
+// Ahora decoramos la tarea Calendario con Email
+const tareaDobleDecorada = gestor.aplicarDecorador(tareaID2, 'email', 'gerente@empresa.com');
+
+
+
+console.log('\n✅ Patrón Strategy implementado exitosamente para la funcionalidad de filtrado.');
+
+
